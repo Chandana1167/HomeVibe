@@ -1,64 +1,49 @@
-/**
- * Service to handle Groq Vision and Groq AI API calls
- */
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result.split(",")[1]); 
+    reader.onload = () => {
+      // Strips out the 'data:image/...;base64,' prefix
+      const base64Data = reader.result.split(",")[1];
+      resolve(base64Data);
+    };
     reader.onerror = (error) => reject(error);
   });
 };
 
 export async function analyzeRoomWithGroq(imageFile, userPrompt) {
-  const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing Gemini API Key. Please configure VITE_GEMINI_API_KEY in your environment variables.");
+  }
 
   try {
-    const base64Image = await fileToBase64(imageFile);
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
+    const base64Data = await fileToBase64(imageFile);
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: imageFile.type || "image/jpeg",
       },
-      body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview", 
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `You are an expert AI Interior Designer. Analyze this room image carefully. 
-                       Identify its architectural elements, current furniture layout, and limitations. 
-                       Then, provide a professional, highly inspirational interior redesign plan based on the user's specific request: "${userPrompt}". 
-                       Structure your response clearly with a Color Palette suggestion, Furniture Recommendations, and Layout Changes.`,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`,
-                },
-              },
-            ],
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
-    });
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || "Failed to communicate with Groq Vision.");
-    }
+    const promptText = `You are an expert AI Interior Designer. Analyze this room image carefully. 
+Identify its architectural elements, current furniture layout, and limitations. 
+Then, provide a professional, highly inspirational interior redesign plan based on the user's specific request: "${userPrompt}". 
+Structure your response clearly with a Color Palette suggestion, Furniture Recommendations, and Layout Changes.`;
 
-    const result = await response.json();
-    return result.choices[0].message.content;
+    const result = await model.generateContent([promptText, imagePart]);
+    const response = await result.response;
+    
+    return response.text();
   } catch (error) {
-    console.error("Groq Vision API Error:", error);
-    throw error;
+    console.error("Gemini Vision API Error:", error);
+    throw new Error(error.message || "Failed to process image with Gemini.");
   }
 }
