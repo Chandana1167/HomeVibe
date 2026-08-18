@@ -6,7 +6,7 @@ const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onload = () => resolve(reader.result.split(",")[1]); 
     reader.onerror = (error) => reject(error);
   });
 };
@@ -24,8 +24,7 @@ export async function analyzeRoomWithGroq(imageFile, userPrompt) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // Updated to a valid Groq multimodal vision model
-        model: "llama-3.2-11b-vision-preview",
+        model: "llama-3.2-90b-vision-preview", 
         messages: [
           {
             role: "user",
